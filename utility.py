@@ -85,31 +85,17 @@ def reconstruction_SADloss(output, target):
 
 def volume_maximization_loss(endmember_matrix):
     """体积最大化约束损失
-    目的：让端元构成的单纯形体积尽可能大，增加可分性
-    原理：端元应该尽可能"张开"，形成大的单纯形，这样更容易区分
-    相比正交性约束，不强制90度直角，但鼓励端元尽可能分散
-    相比最小化体积，不会导致端元"塌缩"退化
-    Args:
-        endmember_matrix: [C, P] 端元矩阵
-    Returns:
-        loss: 标量，-log(det(E^T E))（负号表示最大化体积）
     """
     # 计算 Gram 矩阵
     G = endmember_matrix.T @ endmember_matrix  # [P, P]
-
-    # 体积 ∝ sqrt(det(G))
-    # 最大化 log(det(G)) = 最大化体积
-    # 在损失函数中，我们最小化 -log(det(G))
 
     # 添加正则化保证正定（数值稳定性）
     eps = 1e-6
     P = endmember_matrix.shape[1]
     G_reg = G + eps * torch.eye(P, device=G.device)
 
-    # 使用 slogdet 计算 log(det(G))（数值稳定）
     sign, logdet = torch.slogdet(G_reg)
 
-    # 如果行列式为负或零，返回大的惩罚值
     if sign <= 0:
         return torch.tensor(1e6, device=endmember_matrix.device)
 
@@ -118,33 +104,16 @@ def volume_maximization_loss(endmember_matrix):
 
 
 def abundance_sparsity_loss(abundance):
-    """丰度稀疏性约束损失
-    目的：鼓励每个像素只由少数端元组成
-    使用熵作为稀疏性度量，熵越小越稀疏
-    Args:
-        abundance: [B, P, H, W] 丰度图
-    Returns:
-        loss: 标量，平均熵值
-    """
+    """丰度稀疏性约束损失"""
     # 计算每个像素的丰度熵
     entropy = -torch.sum(abundance * torch.log(abundance + 1e-10), dim=1)  # [B, H, W]
     return torch.mean(entropy)
 
 
 def total_variation_loss(abundance):
-    """全变分(TV)损失 - 空间平滑约束
-    目的：强制丰度图的空间平滑性，减少噪点和椒盐噪声
-    原理：相邻像素的丰度值应该相似，除非在边界处
-    Args:
-        abundance: [B, P, H, W] 丰度图
-    Returns:
-        loss: 标量，平均TV值
-    """
-    # 水平方向差分 (沿W方向)
+    """全变分(TV)损失 - 空间平滑约束"""
     diff_h = abundance[:, :, :, 1:] - abundance[:, :, :, :-1]  # [B, P, H, W-1]
-    # 垂直方向差分 (沿H方向)
     diff_v = abundance[:, :, 1:, :] - abundance[:, :, :-1, :]  # [B, P, H-1, W]
-
     # 计算L1范数 (各向异性TV)
     tv_h = torch.abs(diff_h).mean()
     tv_v = torch.abs(diff_v).mean()
@@ -153,9 +122,7 @@ def total_variation_loss(abundance):
 
 
 def order_endmembers(endmembersGT, endmembers):
-    """对齐预测端元和真实端元的顺序
-    注意：第一个参数是GT，第二个是预测值（与函数名相反，但与SWC-Net保持一致）
-    """
+    """对齐预测端元和真实端元的顺序"""
     num_endmembers = endmembersGT.shape[0]
     SAD_matrix = np.zeros((num_endmembers, num_endmembers))
     SAD_index = np.zeros(num_endmembers, dtype=int)
@@ -180,9 +147,7 @@ def order_endmembers(endmembersGT, endmembers):
 
 
 def order_abundance(abundanceGT, abundance):
-    """对齐预测丰度和真实丰度的顺序
-    注意：第一个参数是GT，第二个是预测值
-    """
+    """对齐预测丰度和真实丰度的顺序"""
     num_endmembers = abundanceGT.shape[2]
     RMSE_matrix = np.zeros((num_endmembers, num_endmembers))
     RMSE_index = np.zeros(num_endmembers, dtype=int)
@@ -290,21 +255,11 @@ def plot_endmembers(endmembers, endmembersGT, save_path, sad_list):
 
 
 def plot_abundances(abundances, abundanceGT, save_path, rmse_list, SAD_index=None):
-    """绘制丰度对比图
-    Args:
-        abundances: 预测丰度 [H, W, P]
-        abundanceGT: 真实丰度 [H, W, P]
-        save_path: 保存路径
-        rmse_list: RMSE结果列表
-        SAD_index: 端元排序索引（如果提供，则使用相同排序；否则独立排序）
-    """
-    # abundances 和 abundanceGT 都应该是 [H, W, P] 格式，不需要转置
+    """绘制丰度对比图"""
     num_endmembers = abundances.shape[2]
 
     if SAD_index is not None:
-        # 使用端元的排序索引（推荐）
         RMSE_index = SAD_index
-        # 计算对应的RMSE值
         RMSE_values = np.zeros(num_endmembers)
         for i in range(num_endmembers):
             RMSE_values[i] = numpy_RMSE(abundances[:, :, RMSE_index[i]], abundanceGT[:, :, i])
@@ -351,7 +306,6 @@ def plot_alpha(alpha_values, save_path):
 
 def reconstruct(abundance, endmembers):
     """重构高光谱图像"""
-    # abundance: [H, W, P], endmembers: [C, P]
     H, W, P = abundance.shape
     abundance_flat = abundance.reshape(H * W, P)  # [N, P]
     reconstructed = abundance_flat @ endmembers.T  # [N, C]
@@ -359,11 +313,7 @@ def reconstruct(abundance, endmembers):
 
 
 def plot_spatial_attention(attention_map, save_path):
-    """绘制空间注意力图 (V3新增)
-    Args:
-        attention_map: [H, W] 空间注意力权重
-        save_path: 保存路径
-    """
+    """绘制空间注意力图"""
     plt.figure(figsize=(8, 8))
     im = plt.imshow(attention_map, cmap='hot', vmin=0, vmax=1)
     plt.colorbar(im, fraction=0.046, pad=0.04)
@@ -374,29 +324,14 @@ def plot_spatial_attention(attention_map, save_path):
     plt.close()
 
 
-# ==================== SLIC超像素约束 ====================
-
 def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
-    """使用SLIC算法生成超像素分割
-
-    Args:
-        hsi_image: [H, W, C] 高光谱图像（numpy数组）
-        n_segments: 期望的超像素数量
-        compactness: 紧凑度参数，越大超像素越规则
-
-    Returns:
-        segments: [H, W] 超像素标签图（整数）
-        n_actual: 实际超像素数量
-    """
+    """使用SLIC算法生成超像素分割"""
     from skimage.segmentation import slic
     from skimage.util import img_as_float
 
-    # 确保图像是float类型
     if hsi_image.max() > 1.0:
         hsi_image = hsi_image / hsi_image.max()
 
-    # 使用前几个主成分进行SLIC（减少计算量）
-    # 或者直接使用全部波段
     if hsi_image.shape[2] > 10:
         # 使用PCA降维到10个波段
         from sklearn.decomposition import PCA
@@ -418,18 +353,7 @@ def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
 
 
 def superpixel_consistency_loss(abundance, superpixel_labels):
-    """超像素一致性损失 (核心创新)
-
-    原理：同一个超像素内的像素应该有相似的丰度分布
-    相比TV损失，这种约束是"结构感知"的，不会模糊真实边界
-
-    Args:
-        abundance: [B, P, H, W] 丰度图（torch张量）
-        superpixel_labels: [H, W] 超像素标签（torch张量，整数）
-
-    Returns:
-        loss: 标量，超像素内部方差的平均值
-    """
+    """超像素一致性损失"""
     B, P, H, W = abundance.shape
     device = abundance.device
 
@@ -440,14 +364,11 @@ def superpixel_consistency_loss(abundance, superpixel_labels):
     # 获取超像素数量
     num_sp = labels_flat.max().item() + 1
 
-    # 使用scatter操作计算每个超像素的统计量
-    # 1. 计算每个超像素的像素数
     ones = torch.ones(H * W, device=device)
     sp_counts = torch.zeros(num_sp, device=device)
     sp_counts.scatter_add_(0, labels_flat, ones)
     sp_counts = sp_counts.clamp(min=1)  # 避免除零
 
-    # 2. 计算每个超像素的丰度均值
     total_loss = 0.0
 
     for b in range(B):
@@ -455,44 +376,31 @@ def superpixel_consistency_loss(abundance, superpixel_labels):
             # 当前丰度通道
             abd = abundance_flat[b, p]  # [N]
 
-            # 计算每个超像素的丰度和
             sp_sum = torch.zeros(num_sp, device=device)
             sp_sum.scatter_add_(0, labels_flat, abd)
 
-            # 计算每个超像素的丰度均值
             sp_mean = sp_sum / sp_counts  # [num_sp]
 
-            # 获取每个像素所属超像素的均值
             pixel_sp_mean = sp_mean[labels_flat]  # [N]
 
             # 计算每个像素与其超像素均值的差异
             diff = abd - pixel_sp_mean
 
-            # 计算方差（加权平均）
             sp_var_sum = torch.zeros(num_sp, device=device)
             sp_var_sum.scatter_add_(0, labels_flat, diff ** 2)
             sp_var = sp_var_sum / sp_counts  # 每个超像素的方差
 
-            # 平均所有超像素的方差
             total_loss += sp_var.mean()
 
     return total_loss / (B * P)
 
 
 def plot_superpixel_segments(segments, save_path):
-    """绘制超像素分割结果
-
-    Args:
-        segments: [H, W] 超像素标签图
-        save_path: 保存路径
-    """
+    """绘制超像素分割结果"""
     from skimage.segmentation import mark_boundaries
-
-    # 创建一个灰度背景
     H, W = segments.shape
     background = np.ones((H, W, 3)) * 0.5
 
-    # 标记边界
     marked = mark_boundaries(background, segments, color=(1, 0, 0), mode='thick')
 
     plt.figure(figsize=(8, 8))
