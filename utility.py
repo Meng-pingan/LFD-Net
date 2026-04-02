@@ -114,7 +114,7 @@ def total_variation_loss(abundance):
     """全变分(TV)损失 - 空间平滑约束"""
     diff_h = abundance[:, :, :, 1:] - abundance[:, :, :, :-1]  # [B, P, H, W-1]
     diff_v = abundance[:, :, 1:, :] - abundance[:, :, :-1, :]  # [B, P, H-1, W]
-    # 计算L1范数 (各向异性TV)
+    # 计算L1范数 
     tv_h = torch.abs(diff_h).mean()
     tv_v = torch.abs(diff_v).mean()
 
@@ -264,7 +264,7 @@ def plot_abundances(abundances, abundanceGT, save_path, rmse_list, SAD_index=Non
         for i in range(num_endmembers):
             RMSE_values[i] = numpy_RMSE(abundances[:, :, RMSE_index[i]], abundanceGT[:, :, i])
     else:
-        # 独立排序（不推荐，仅用于向后兼容）
+        # 独立排序
         RMSE_index, RMSE_values = order_abundance(abundanceGT.copy(), abundances.copy())
 
     fig, axes = plt.subplots(num_endmembers, 2, figsize=(8, 3 * num_endmembers))
