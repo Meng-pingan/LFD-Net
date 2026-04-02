@@ -18,7 +18,6 @@ from utility import (load_HSI, HSIDataset, reconstruction_SADloss, hyperVCA,
                      generate_slic_segments, superpixel_consistency_loss,
                      plot_superpixel_segments)
 
-# ==================== 完全确定性配置 ====================
 seed = 42
 random.seed(seed)
 torch.manual_seed(seed)
@@ -26,16 +25,15 @@ np.random.seed(seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed_all(seed)
 
-# 确保完全可重复性的额外设置
-torch.backends.cudnn.deterministic = True  # 强制cuDNN使用确定性算法
-torch.backends.cudnn.benchmark = False     # 禁用cuDNN自动调优
+torch.backends.cudnn.deterministic = True  
+torch.backends.cudnn.benchmark = False     
 
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}\n")
 
 # ==================== 数据集配置 ====================
-dataset = "sy30"  # 可选: "Samson", "Jasper", "houston", "sy30"
+dataset = "sy30"  
 
 dataset_paths = {
     "Samson": "Datasets/Samson.mat",
@@ -50,7 +48,6 @@ hyperparams = {
     "sy30": {"epochs": 400, "lr": 0.01, "step_size": 35, "gamma": 0.7, "weight_decay": 1e-4},
 }
 
-# ==================== 特定配置 ====================
 # 数据集特定损失超参数配置
 loss_hyperparams = {
     "Samson": {
@@ -61,8 +58,8 @@ loss_hyperparams = {
         "slic_n_segments": 150,
         "slic_compactness": 0.1,
         "dropout": 0.2,
-        "alpha_init": 0.5,  # 标准半阶微分
-        "kernel_size": 7    # 标准卷积核（95×95图像）
+        "alpha_init": 0.5,  
+        "kernel_size": 7    
     },
     "Jasper": {
         "phase1_epochs": 70,
@@ -72,8 +69,8 @@ loss_hyperparams = {
         "slic_n_segments": 200,
         "slic_compactness": 0.1,
         "dropout": 0.2,
-        "alpha_init": 0.5,  # 标准半阶微分
-        "kernel_size": 7    # 标准卷积核（100×100图像）
+        "alpha_init": 0.5,  
+        "kernel_size": 7   
     },
     "sy30": {
             "phase1_epochs": 50,
@@ -83,12 +80,12 @@ loss_hyperparams = {
             "slic_n_segments": 200,
             "slic_compactness": 0.1,
             "dropout": 0.2,
-            "alpha_init": 0.5,  # 标准半阶微分
-            "kernel_size": 7    # 标准卷积核（95×95图像）
+            "alpha_init": 0.5,  
+            "kernel_size": 7    
     }
 }
 
-# 编码器参数（所有数据集通用）
+# 编码器参数
 ENCODER_HIDDEN_CHANNELS = 32  # 编码器中间层维度（第一层输出维度）
 ENCODER_HIDDEN_DIM = 20  # 编码器输出层维度（第二层输出维度）
 
@@ -167,11 +164,10 @@ print("\nRunning VCA for endmember initialization...")
 print("Using fixed random seed for reproducibility (seed={})".format(seed))
 from utility import order_endmembers
 
-# 固定随机种子，只运行一次VCA（最公平的方法）
 np.random.seed(seed)
 vca_endmembers_trial, _ = hyperVCA(data.T, num_endmembers)
 
-# 可选：计算与GT的mSAD用于监控
+# 计算与GT的mSAD用于监控
 vca_np = vca_endmembers_trial.T
 _, vca_SAD_values = order_endmembers(endmember_GT.copy(), vca_np.copy())
 vca_mSAD = vca_SAD_values.mean()
@@ -189,14 +185,12 @@ model = LFDNet(
     kernel_size=7,
     hidden_channels=ENCODER_HIDDEN_CHANNELS,
     hidden_dim=ENCODER_HIDDEN_DIM,
-    alpha_init=alpha_init  # 数据集特定的α初始值
+    alpha_init=alpha_init  
 ).to(device)
 
-# 用VCA初始化解码器权重
 with torch.no_grad():
     model.decoder.weight.data = vca_endmembers.unsqueeze(2).unsqueeze(3).to(device)
 
-# Kaiming初始化
 def init_weights(m):
     if isinstance(m, torch.nn.Conv2d):
         torch.nn.init.kaiming_normal_(m.weight.data)
@@ -206,14 +200,6 @@ def init_weights(m):
 model.encoder.apply(init_weights)
 model.spatial_attention.apply(init_weights)
 
-# 打印模型参数量
-total_params = sum(p.numel() for p in model.parameters())
-trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print(f"\nModel Parameters:")
-print(f"  Total: {total_params:,}")
-print(f"  Trainable: {trainable_params:,}")
-
-# ==================== 优化器 ====================
 optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
 
@@ -230,7 +216,7 @@ print(f"  Lambda_SLIC: {LAMBDA_SLIC}")
 print(f"  SLIC segments: {SLIC_N_SEGMENTS}, compactness: {SLIC_COMPACTNESS}")
 print(f"  Dropout: {dropout}")
 print(f"  Alpha_init (Fractional Derivative): {alpha_init}")
-print(f"  [V5.2 NEW] Medium Spectral-Spatial Encoder:")
+print(f"  Medium Spectral-Spatial Encoder:")
 print(f"    - Spectral branch: 2 layers 1x1 conv")
 print(f"    - Spatial branch: 2 layers 3x3 conv")
 print(f"    - Hidden channels: {ENCODER_HIDDEN_CHANNELS} (intermediate layer)")
@@ -249,7 +235,6 @@ encoder_branch_history = []
 for epoch in range(EPOCHS):
     model.train()
     random.seed(seed)
-    # 前向传播 (返回4个值)
     abundance, reconstruction, spatial_weights, encoder_branch_weights = model(original_HSI)
     loss_recon = reconstruction_SADloss(reconstruction, original_HSI)
 
@@ -281,7 +266,6 @@ for epoch in range(EPOCHS):
     optimizer.step()
     scheduler.step()
 
-    # 记录编码器分支权重
     branch_w = encoder_branch_weights.squeeze().cpu().detach().numpy()
     encoder_branch_history.append(branch_w.copy())
 
