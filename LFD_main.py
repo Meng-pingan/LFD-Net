@@ -35,14 +35,12 @@ dataset = "sy30"
 
 dataset_paths = {
     "Samson": "Datasets/Samson.mat",
-    "Jasper": "Datasets/Jasper.mat",
     "sy30": "Datasets/sy30.mat",
 }
 
 # 数据集特定超参数
 hyperparams = {
     "Samson": {"epochs": 400, "lr": 0.03, "step_size": 35, "gamma": 0.7, "weight_decay": 2e-4},
-    "Jasper": {"epochs": 400, "lr": 0.03, "step_size": 35, "gamma": 0.7, "weight_decay": 2e-4},
     "sy30": {"epochs": 400, "lr": 0.01, "step_size": 35, "gamma": 0.7, "weight_decay": 1e-4},
 }
 
@@ -58,17 +56,6 @@ loss_hyperparams = {
         "dropout": 0.2,
         "alpha_init": 0.5,  
         "kernel_size": 7    
-    },
-    "Jasper": {
-        "phase1_epochs": 70,
-        "lambda_minvol": 0.0001,
-        "lambda_sparse": 0.05,
-        "lambda_slic": 0.08,
-        "slic_n_segments": 200,
-        "slic_compactness": 0.1,
-        "dropout": 0.2,
-        "alpha_init": 0.5,  
-        "kernel_size": 7   
     },
     "sy30": {
             "phase1_epochs": 50,
