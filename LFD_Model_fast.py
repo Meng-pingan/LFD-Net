@@ -5,9 +5,7 @@ import numpy as np
 
 
 class FractionalDerivativeConv(nn.Module):
-    """可学习分数阶微分卷积模块
-    """
-
+    """可学习分数阶微分卷积模块"""
     def __init__(self, num_bands, kernel_size=7, alpha_init=0.5):
         super().__init__()
         self.num_bands = num_bands
@@ -21,27 +19,27 @@ class FractionalDerivativeConv(nn.Module):
         self.scale = nn.Parameter(torch.ones(num_bands) * 10.0)
 
     def _generate_all_kernels(self, alpha):
-        k = torch.arange(self.K, device=alpha.device, dtype=alpha.dtype)  # [K]
+        k = torch.arange(self.K, device=alpha.device, dtype=alpha.dtype)  
 
-        alpha_exp = alpha.unsqueeze(1)  # [C, 1]
-        k_exp = k.unsqueeze(0)  # [1, K]
+        alpha_exp = alpha.unsqueeze(1)  
+        k_exp = k.unsqueeze(0) 
 
-        valid_mask = (alpha_exp - k_exp + 1) > 0  # [C, K]
+        valid_mask = (alpha_exp - k_exp + 1) > 0  
 
-        alpha_k_diff = alpha_exp - k_exp + 1  # [C, K]
+        alpha_k_diff = alpha_exp - k_exp + 1  
         alpha_k_diff_safe = torch.where(valid_mask, alpha_k_diff, torch.ones_like(alpha_k_diff))
 
         log_coef = (torch.lgamma(alpha_exp + 1)
                    - torch.lgamma(k_exp + 1)
-                   - torch.lgamma(alpha_k_diff_safe))  # [C, K]
+                   - torch.lgamma(alpha_k_diff_safe))  
 
         # 计算权重
-        sign = ((-1.0) ** k_exp)  # [1, K]
-        weights = sign * torch.exp(log_coef)  # [C, K]
+        sign = ((-1.0) ** k_exp)  
+        weights = sign * torch.exp(log_coef)  
 
         weights = torch.where(valid_mask, weights, torch.zeros_like(weights))
 
-        weights_sum = torch.abs(weights).sum(dim=1, keepdim=True)  # [C, 1]
+        weights_sum = torch.abs(weights).sum(dim=1, keepdim=True)  
         weights_normalized = weights / (weights_sum + 1e-8)
 
         zero_rows = (weights_sum.squeeze() < 1e-8)
@@ -51,7 +49,7 @@ class FractionalDerivativeConv(nn.Module):
             identity_kernel[center_idx] = 1.0
             weights_normalized[zero_rows] = identity_kernel
 
-        return weights_normalized  # [C, K]
+        return weights_normalized  
 
     def forward(self, x):
         # x: [B, C, H, W]
