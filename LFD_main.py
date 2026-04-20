@@ -12,7 +12,6 @@ from LFD_Model_fast import LFDNet
 from utility import (load_HSI, reconstruction_SADloss, hyperVCA,
                      plot_endmembers, plot_abundances, plot_alpha, reconstruct,
                      volume_maximization_loss, abundance_sparsity_loss,
-                     plot_spatial_attention,
                      generate_slic_segments, superpixel_consistency_loss,
                      plot_superpixel_segments)
 
@@ -110,7 +109,7 @@ LAMBDA_SLIC = loss_params["lambda_slic"]
 SLIC_N_SEGMENTS = loss_params["slic_n_segments"]
 SLIC_COMPACTNESS = loss_params["slic_compactness"]
 dropout = loss_params["dropout"]
-alpha_init = loss_params["alpha_init"]  # 分数阶微分α初始值
+alpha_init = loss_params["alpha_init"]  
 
 # ==================== 创建输出目录 ====================
 output_dir = f"Results/LFD-Net/{dataset}"
@@ -148,13 +147,6 @@ from utility import order_endmembers
 
 np.random.seed(seed)
 vca_endmembers_trial, _ = hyperVCA(data.T, num_endmembers)
-
-# 计算与GT的mSAD用于监控
-vca_np = vca_endmembers_trial.T
-_, vca_SAD_values = order_endmembers(endmember_GT.copy(), vca_np.copy())
-vca_mSAD = vca_SAD_values.mean()
-print(f"VCA initialization mSAD: {vca_mSAD:.4f} (reference only)")
-
 vca_endmembers = torch.from_numpy(vca_endmembers_trial).float()
 
 # ==================== 创建模型 ====================
@@ -269,8 +261,7 @@ sio.savemat(f"{output_dir}/mat/LFD-Net_result.mat", {
 SAD_index, SAD_values = order_endmembers(endmember_GT_np.copy(), endmembers_np.copy())
 plot_endmembers(endmembers_np, endmember_GT_np, f"{output_dir}/endmember/{dataset}_endmembers", sad_results)
 plot_abundances(abundance_np, abundance_GT_np, f"{output_dir}/abundance/{dataset}_abundance", rmse_results, SAD_index=SAD_index)
-plot_spatial_attention(attention_np, f"{output_dir}/attention/{dataset}_attention")
-plot_alpha(alpha_np, f"{output_dir}/alpha/{dataset}_alpha")
+
 
 
 
