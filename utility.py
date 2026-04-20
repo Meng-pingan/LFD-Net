@@ -10,27 +10,22 @@ matplotlib.rc("font", family='Microsoft YaHei')
 
 
 class HSI:
-    """高光谱图像数据类"""
-
     def __init__(self, data, rows, cols, gt, abundance_gt):
         if data.shape[0] < data.shape[1]:
             data = data.T
         self.bands = np.min(data.shape)
         self.cols = cols
         self.rows = rows
-        # 使用Fortran顺序(列优先)匹配Matlab存储
         self.image = np.reshape(data, (self.rows, self.cols, self.bands), order='F')
         self.gt = gt
         self.abundance_gt = abundance_gt
 
     def array(self):
-        """返回 像元*波段 的数据阵列"""
-        # 使用Fortran顺序匹配Matlab
         return np.reshape(self.image, (self.rows * self.cols, self.bands), order='F')
 
 
 def load_HSI(path):
-    """加载高光谱数据"""
+    """加载数据"""
     try:
         data = sio.loadmat(path)
     except NotImplementedError:
@@ -49,7 +44,6 @@ def load_HSI(path):
 
 class HSIDataset(torch.utils.data.Dataset):
     """高光谱数据集"""
-
     def __init__(self, img):
         self.img = img.float()
 
@@ -61,21 +55,18 @@ class HSIDataset(torch.utils.data.Dataset):
 
 
 def numpy_SAD(y_true, y_pred):
-    """计算光谱角距离"""
     cos = y_pred.dot(y_true) / (np.linalg.norm(y_true) * np.linalg.norm(y_pred) + 1e-8)
     cos = np.clip(cos, -1.0, 1.0)
     return np.arccos(cos)
 
 
 def numpy_RMSE(y_true, y_pred):
-    """计算RMSE"""
     diff = y_true - y_pred
     mse = np.mean(diff ** 2)
     return np.sqrt(mse)
 
 
 def reconstruction_SADloss(output, target):
-    """重构SAD损失"""
     _, band, h, w = output.shape
     output = torch.reshape(output, (band, h * w))
     target = torch.reshape(target, (band, h * w))
@@ -84,40 +75,29 @@ def reconstruction_SADloss(output, target):
 
 
 def volume_maximization_loss(endmember_matrix):
-    """体积最大化约束损失
-    """
-    # 计算 Gram 矩阵
+    """体积最大化约束损失"""
     G = endmember_matrix.T @ endmember_matrix  # [P, P]
-
-    # 添加正则化保证正定（数值稳定性）
     eps = 1e-6
     P = endmember_matrix.shape[1]
     G_reg = G + eps * torch.eye(P, device=G.device)
 
     sign, logdet = torch.slogdet(G_reg)
-
     if sign <= 0:
         return torch.tensor(1e6, device=endmember_matrix.device)
-
-    # 返回负的 logdet，这样最小化损失 = 最大化体积
     return -logdet
 
 
 def abundance_sparsity_loss(abundance):
     """丰度稀疏性约束损失"""
-    # 计算每个像素的丰度熵
     entropy = -torch.sum(abundance * torch.log(abundance + 1e-10), dim=1)  # [B, H, W]
     return torch.mean(entropy)
 
 
 def total_variation_loss(abundance):
-    """全变分(TV)损失 - 空间平滑约束"""
     diff_h = abundance[:, :, :, 1:] - abundance[:, :, :, :-1]  # [B, P, H, W-1]
     diff_v = abundance[:, :, 1:, :] - abundance[:, :, :-1, :]  # [B, P, H-1, W]
-    # 计算L1范数 
     tv_h = torch.abs(diff_h).mean()
     tv_v = torch.abs(diff_v).mean()
-
     return tv_h + tv_v
 
 
@@ -131,7 +111,6 @@ def order_endmembers(endmembersGT, endmembers):
     egt = endmembersGT.copy()
     e = endmembers.copy()
 
-    # 归一化
     for i in range(num_endmembers):
         egt[i] = egt[i] / (egt[i].max() + 1e-8)
         e[i] = e[i] / (e[i].max() + 1e-8)
@@ -147,7 +126,6 @@ def order_endmembers(endmembersGT, endmembers):
 
 
 def order_abundance(abundanceGT, abundance):
-    """对齐预测丰度和真实丰度的顺序"""
     num_endmembers = abundanceGT.shape[2]
     RMSE_matrix = np.zeros((num_endmembers, num_endmembers))
     RMSE_index = np.zeros(num_endmembers, dtype=int)
@@ -167,7 +145,6 @@ def order_abundance(abundanceGT, abundance):
 
 
 def hyperVCA(M, q):
-    """VCA算法提取端元"""
     L, N = M.shape
 
     rMean = np.mean(M, axis=1, keepdims=True)
@@ -231,7 +208,6 @@ def plot_endmembers(endmembers, endmembersGT, save_path, sad_list):
     title = f"mSAD: {SAD_values.mean():.4f} radians"
     plt.suptitle(title, fontsize=15)
 
-    # 归一化
     e = endmembers.copy()
     egt = endmembersGT.copy()
     for i in range(num_endmembers):
@@ -264,7 +240,6 @@ def plot_abundances(abundances, abundanceGT, save_path, rmse_list, SAD_index=Non
         for i in range(num_endmembers):
             RMSE_values[i] = numpy_RMSE(abundances[:, :, RMSE_index[i]], abundanceGT[:, :, i])
     else:
-        # 独立排序
         RMSE_index, RMSE_values = order_abundance(abundanceGT.copy(), abundances.copy())
 
     fig, axes = plt.subplots(num_endmembers, 2, figsize=(8, 3 * num_endmembers))
@@ -290,39 +265,12 @@ def plot_abundances(abundances, abundanceGT, save_path, rmse_list, SAD_index=Non
     plt.savefig(save_path + '.png', dpi=150)
     plt.close()
 
-
-def plot_alpha(alpha_values, save_path):
-    """绘制alpha值分布"""
-    plt.figure(figsize=(12, 4))
-    plt.plot(alpha_values, 'b-', linewidth=1.0)
-    plt.xlabel('Band Index')
-    plt.ylabel('Alpha Value')
-    plt.title(f'Learnable Alpha Distribution (mean={alpha_values.mean():.3f})')
-    plt.grid(True, alpha=0.3)
-    plt.tight_layout()
-    plt.savefig(save_path + '.png', dpi=150)
-    plt.close()
-
-
 def reconstruct(abundance, endmembers):
-    """重构高光谱图像"""
+    """重构"""
     H, W, P = abundance.shape
     abundance_flat = abundance.reshape(H * W, P)  # [N, P]
     reconstructed = abundance_flat @ endmembers.T  # [N, C]
     return reconstructed
-
-
-def plot_spatial_attention(attention_map, save_path):
-    """绘制空间注意力图"""
-    plt.figure(figsize=(8, 8))
-    im = plt.imshow(attention_map, cmap='hot', vmin=0, vmax=1)
-    plt.colorbar(im, fraction=0.046, pad=0.04)
-    plt.title(f'Spatial Attention Map\n(mean={attention_map.mean():.3f}, std={attention_map.std():.3f})')
-    plt.axis('off')
-    plt.tight_layout()
-    plt.savefig(save_path + '.png', dpi=150)
-    plt.close()
-
 
 def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
     """使用SLIC算法生成超像素分割"""
@@ -333,7 +281,6 @@ def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
         hsi_image = hsi_image / hsi_image.max()
 
     if hsi_image.shape[2] > 10:
-        # 使用PCA降维到10个波段
         from sklearn.decomposition import PCA
         H, W, C = hsi_image.shape
         hsi_flat = hsi_image.reshape(-1, C)
@@ -343,7 +290,6 @@ def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
     else:
         hsi_reduced = hsi_image
 
-    # 运行SLIC
     segments = slic(hsi_reduced, n_segments=n_segments, compactness=compactness,
                     start_label=0, channel_axis=2)
 
@@ -353,42 +299,37 @@ def generate_slic_segments(hsi_image, n_segments=100, compactness=10.0):
 
 
 def superpixel_consistency_loss(abundance, superpixel_labels):
-    """超像素一致性损失"""
     B, P, H, W = abundance.shape
     device = abundance.device
 
-    # 展平空间维度
     abundance_flat = abundance.view(B, P, -1)  # [B, P, N]
     labels_flat = superpixel_labels.view(-1).long()  # [N]
 
-    # 获取超像素数量
     num_sp = labels_flat.max().item() + 1
 
     ones = torch.ones(H * W, device=device)
     sp_counts = torch.zeros(num_sp, device=device)
     sp_counts.scatter_add_(0, labels_flat, ones)
-    sp_counts = sp_counts.clamp(min=1)  # 避免除零
+    sp_counts = sp_counts.clamp(min=1)  
 
     total_loss = 0.0
 
     for b in range(B):
         for p in range(P):
-            # 当前丰度通道
-            abd = abundance_flat[b, p]  # [N]
+            abd = abundance_flat[b, p] 
 
             sp_sum = torch.zeros(num_sp, device=device)
             sp_sum.scatter_add_(0, labels_flat, abd)
 
-            sp_mean = sp_sum / sp_counts  # [num_sp]
+            sp_mean = sp_sum / sp_counts 
 
-            pixel_sp_mean = sp_mean[labels_flat]  # [N]
+            pixel_sp_mean = sp_mean[labels_flat]  
 
-            # 计算每个像素与其超像素均值的差异
             diff = abd - pixel_sp_mean
 
             sp_var_sum = torch.zeros(num_sp, device=device)
             sp_var_sum.scatter_add_(0, labels_flat, diff ** 2)
-            sp_var = sp_var_sum / sp_counts  # 每个超像素的方差
+            sp_var = sp_var_sum / sp_counts  
 
             total_loss += sp_var.mean()
 
