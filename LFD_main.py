@@ -10,7 +10,7 @@ import random
 
 from LFD_Model_fast import LFDNet
 from utility import (load_HSI, reconstruction_SADloss, hyperVCA,
-                     plot_endmembers, plot_abundances, plot_alpha, reconstruct,
+                     plot_endmembers, plot_abundances, reconstruct,
                      volume_maximization_loss, abundance_sparsity_loss,
                      generate_slic_segments, superpixel_consistency_loss,
                      plot_superpixel_segments)
@@ -84,7 +84,6 @@ num_bands = data.shape[1]
 print(f"Data shape: {data.shape}, Bands: {num_bands}, Endmembers: {num_endmembers}")
 print(f"Image size: {rows} x {cols}")
 
-# 数据范围检查和鲁棒归一化
 print(f"Data Range: Min={data.min():.4f}, Max={data.max():.4f}")
 if data.max() > 1.0:
     print("Warning: Data > 1.0, performing robust normalization...")
